@@ -1,78 +1,211 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>헤어/네일샵 예약 시스템</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Noto Sans KR', sans-serif; }
-        .hidden { display: none; }
-        .selected-slot {
-            background-color: #60a5fa; /* bg-blue-400 */
-            color: white;
-            border: 2px solid #2563eb; /* border-blue-700 */
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>헤어/네일샵 예약 시스템</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans KR', sans-serif; }
+    .hidden { display: none; }
+    .selected-slot {
+      background-color: #60a5fa; /* bg-blue-400 */
+      color: white;
+      border: 2px solid #2563eb; /* border-blue-700 */
+    }
+  </style>
 </head>
 <body class="bg-gray-50">
 
-    <div id="login-container" class="min-h-screen flex items-center justify-center">
-        </div>
+  <!-- 로그인 컨테이너 -->
+  <div id="login-container" class="min-h-screen flex items-center justify-center">
+    <div class="bg-white p-6 rounded-xl shadow-md w-full max-w-md space-y-4">
+      <h1 class="text-2xl font-bold text-gray-800 text-center">헤어/네일샵 예약</h1>
 
-    <div id="customer-page-container" class="hidden container mx-auto p-4 md:p-8 space-y-8">
-        <header class="flex justify-between items-center">
-            <h1 id="user-info" class="text-2xl font-bold text-gray-800"></h1>
-            <button id="logout-btn" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300">로그아웃</button>
-        </header>
+      <div class="space-y-2">
+        <label class="text-sm font-medium text-gray-700">이메일</label>
+        <input id="login-id" type="email" class="w-full px-3 py-2 border rounded-lg" placeholder="you@example.com" />
+      </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div class="bg-white p-6 rounded-xl shadow-md space-y-4">
-                <h2 class="text-xl font-bold border-b pb-2">예약하기</h2>
-                <div class="space-y-2">
-                    <label class="font-semibold text-gray-700">1. 매장 선택</label>
-                    <input type="text" id="store-search-input" placeholder="매장 이름을 검색하세요" class="w-full px-3 py-2 border rounded-lg">
-                    <div id="store-search-results" class="border rounded-lg max-h-40 overflow-y-auto"></div>
-                    <div id="selected-store-info" class="hidden"></div>
-                </div>
-                 <div class="space-y-2">
-                    <label class="font-semibold text-gray-700">2. 시술 선택</label>
-                    <div id="service-selection" class="space-y-2 p-2 border rounded-lg max-h-48 overflow-y-auto">
-                        <p class="text-gray-500 text-sm">매장을 먼저 선택해주세요.</p>
-                    </div>
-                    <p id="estimated-time" class="text-right font-medium text-blue-600"></p>
-                </div>
-                <div class="space-y-2">
-                    <label class="font-semibold text-gray-700">3. 날짜 및 시간 선택</label>
-                    <div id="calendar-container" class="p-2 border rounded-lg"></div>
-                    <div id="time-slots-container" class="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2 p-2 border rounded-lg max-h-48 overflow-y-auto">
-                        <p class="text-gray-400 col-span-full">날짜를 선택해주세요.</p>
-                    </div>
-                </div>
-                <button id="reserve-btn" disabled class="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 disabled:bg-gray-300 transition-colors font-bold text-lg">예약 확정</button>
-            </div>
+      <div class="space-y-2">
+        <label class="text-sm font-medium text-gray-700">비밀번호</label>
+        <input id="login-password" type="password" class="w-full px-3 py-2 border rounded-lg" placeholder="******" />
+      </div>
 
-            <div class="bg-white p-6 rounded-xl shadow-md space-y-4">
-                <h2 class="text-xl font-bold border-b pb-2">나의 예약내역</h2>
-                <div id="my-reservations-list" class="space-y-3 max-h-[600px] overflow-y-auto">
-                    <p class="text-gray-500">예약 내역이 없습니다.</p>
-                </div>
-            </div>
-        </div>
+      <div class="grid grid-cols-2 gap-2">
+        <button id="login-store-btn" class="bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700">매장 로그인</button>
+        <button id="login-customer-btn" class="bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">고객 로그인</button>
+      </div>
 
+      <button id="signup-btn" class="w-full bg-gray-100 text-gray-800 py-2 rounded-lg hover:bg-gray-200">
+        회원가입
+      </button>
     </div>
+  </div>
 
-    <div id="store-page-container" class="hidden container mx-auto p-4 md:p-8 space-y-8">
+  <!-- 고객 페이지 -->
+  <div id="customer-page-container" class="hidden container mx-auto p-4 md:p-8 space-y-8">
+    <header class="flex justify-between items-center">
+      <h1 id="user-info" class="text-2xl font-bold text-gray-800"></h1>
+      <button id="logout-btn" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300">로그아웃</button>
+    </header>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div class="bg-white p-6 rounded-xl shadow-md space-y-4">
+        <h2 class="text-xl font-bold border-b pb-2">예약하기</h2>
+
+        <div class="space-y-2">
+          <label class="font-semibold text-gray-700">1. 매장 선택</label>
+          <input id="store-search-input" type="text" placeholder="매장 이름을 검색하세요" class="w-full px-3 py-2 border rounded-lg">
+          <div id="store-search-results" class="border rounded-lg max-h-40 overflow-y-auto"></div>
+          <div id="selected-store-info" class="hidden"></div>
         </div>
 
-    <div id="signup-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        </div>
-    
-    <div id="service-settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="space-y-2">
+          <label class="font-semibold text-gray-700">2. 시술 선택</label>
+          <div id="service-selection" class="space-y-2 p-2 border rounded-lg max-h-48 overflow-y-auto">
+            <p class="text-gray-500 text-sm">매장을 먼저 선택해주세요.</p>
+          </div>
+          <p id="estimated-time" class="text-right font-medium text-blue-600"></p>
         </div>
 
-    <script type="module" src="/static/js/script.js"></script>
+        <div class="space-y-2">
+          <label class="font-semibold text-gray-700">3. 날짜 및 시간 선택</label>
+          <div id="calendar-container" class="p-2 border rounded-lg"></div>
+          <div id="time-slots-container" class="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2 p-2 border rounded-lg max-h-48 overflow-y-auto">
+            <p class="text-gray-400 col-span-full">날짜를 선택해주세요.</p>
+          </div>
+        </div>
 
+        <button id="reserve-btn" disabled
+                class="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 disabled:bg-gray-300 transition-colors font-bold text-lg">
+          예약 확정
+        </button>
+      </div>
+
+      <div class="bg-white p-6 rounded-xl shadow-md space-y-4">
+        <h2 class="text-xl font-bold border-b pb-2">나의 예약내역</h2>
+        <div id="my-reservations-list" class="space-y-3 max-h-[600px] overflow-y-auto">
+          <p class="text-gray-500">예약 내역이 없습니다.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 매장(관리자) 페이지 -->
+  <div id="store-page-container" class="hidden container mx-auto p-4 md:p-8 space-y-8">
+    <header class="flex justify-between items-center">
+      <h1 id="store-user-info" class="text-2xl font-bold text-gray-800"></h1>
+      <button id="store-logout-btn" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300">로그아웃</button>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div class="bg-white p-6 rounded-xl shadow-md space-y-4">
+        <div class="flex justify-between items-center">
+          <h2 class="text-xl font-bold">시간 관리</h2>
+          <button id="service-setting-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">시술 설정</button>
+        </div>
+
+        <div id="store-calendar-container" class="p-2 border rounded-lg"></div>
+
+        <div>
+          <label class="font-semibold text-gray-700">시간 슬롯</label>
+          <div id="store-time-slots-container" class="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2 p-2 border rounded-lg max-h-64 overflow-y-auto"></div>
+        </div>
+
+        <div id="store-slot-actions" class="hidden flex items-center gap-2">
+          <button id="close-time-btn" class="bg-black text-white px-3 py-2 rounded-lg">닫힘 처리</button>
+          <button id="open-duplicate-btn" class="bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700">중복 허용</button>
+          <button id="open-time-btn" class="bg-gray-200 text-gray-800 px-3 py-2 rounded-lg hover:bg-gray-300">기본 상태</button>
+        </div>
+      </div>
+
+      <div class="bg-white p-6 rounded-xl shadow-md space-y-4">
+        <h2 class="text-xl font-bold border-b pb-2">해당 날짜 예약 목록</h2>
+        <div id="store-reservation-list" class="space-y-3 max-h-[600px] overflow-y-auto">
+          <p class="text-gray-500">달력에서 날짜를 선택해주세요.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 회원가입 모달 -->
+  <div id="signup-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white w-full max-w-2xl rounded-xl p-6 space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-xl font-bold">회원가입</h3>
+        <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700">&times;</button>
+      </div>
+
+      <div class="space-y-2">
+        <p class="text-sm text-gray-700 font-medium">회원 유형</p>
+        <div class="flex gap-4">
+          <label class="flex items-center gap-2">
+            <input type="radio" name="user-type" value="customer" />
+            <span>고객</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="radio" name="user-type" value="store" />
+            <span>매장</span>
+          </label>
+        </div>
+      </div>
+
+      <form id="signup-form" class="space-y-4">
+        <!-- 매장 전용 -->
+        <div id="store-fields" class="hidden space-y-2">
+          <div class="grid md:grid-cols-2 gap-3">
+            <input id="store-email" type="email" placeholder="이메일" class="px-3 py-2 border rounded-lg">
+            <input id="store-name" type="text" placeholder="매장명" class="px-3 py-2 border rounded-lg">
+            <input id="store-phone" type="tel" placeholder="연락처" class="px-3 py-2 border rounded-lg">
+            <input id="store-address" type="text" placeholder="주소" class="px-3 py-2 border rounded-lg">
+            <input id="store-password" type="password" placeholder="비밀번호(6자 이상)" class="px-3 py-2 border rounded-lg">
+            <input id="store-password-confirm" type="password" placeholder="비밀번호 확인" class="px-3 py-2 border rounded-lg">
+          </div>
+        </div>
+
+        <!-- 고객 전용 -->
+        <div id="customer-fields" class="hidden space-y-2">
+          <div class="grid md:grid-cols-2 gap-3">
+            <input id="customer-email" type="email" placeholder="이메일" class="px-3 py-2 border rounded-lg">
+            <input id="customer-name" type="text" placeholder="이름" class="px-3 py-2 border rounded-lg">
+            <input id="customer-phone" type="tel" placeholder="연락처" class="px-3 py-2 border rounded-lg">
+            <input id="customer-password" type="password" placeholder="비밀번호(6자 이상)" class="px-3 py-2 border rounded-lg">
+            <input id="customer-password-confirm" type="password" placeholder="비밀번호 확인" class="px-3 py-2 border rounded-lg">
+          </div>
+        </div>
+
+        <button id="submit-signup-btn" type="button" disabled
+                class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700">
+          가입 완료
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 시술 설정 모달 -->
+  <div id="service-settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white w-full max-w-3xl rounded-xl p-6 space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-xl font-bold">시술 카테고리/메뉴 관리</h3>
+        <button id="close-service-modal-btn" class="text-gray-500 hover:text-gray-700">&times;</button>
+      </div>
+
+      <div class="flex gap-2">
+        <input id="new-category-name" type="text" placeholder="새 카테고리명" class="flex-1 px-3 py-2 border rounded-lg">
+        <button id="add-category-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">카테고리 추가</button>
+      </div>
+
+      <div id="service-categories-list" class="space-y-3 max-h-[60vh] overflow-y-auto">
+        <p class="text-gray-500">카테고리를 추가해주세요.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 개발/배포 메모:
+       - Flask 라우팅을 쓴다면 아래 경로(/static/...) 유지
+       - GitHub Pages(정적)만 쓴다면 src="static/js/script.js" 로 바꿔도 OK -->
+  <script type="module" src="/static/js/script.js"></script>
 </body>
 </html>
