@@ -167,8 +167,6 @@ const handleLogout = () => signOut(auth);
 
 loginStoreBtn.addEventListener('click', () => handleLogin('store'));
 loginCustomerBtn.addEventListener('click', () => handleLogin('customer'));
-logoutBtn.addEventListener('click', handleLogout);
-storeLogoutBtn.addEventListener('click', handleLogout);
 
 // ===================================================================================
 // 고객 페이지 로직
@@ -212,6 +210,7 @@ async function initCustomerPage() {
     customerElements.storeSearchInput.addEventListener('input', handleStoreSearchInput);
     customerElements.serviceSelection.addEventListener('change', handleServiceSelection);
     customerElements.reserveBtn.addEventListener('click', handleReservation);
+    logoutBtn.addEventListener('click', handleLogout); // 이 줄 추가
 }
 
 function handleStoreSearchInput(e) {
@@ -586,6 +585,7 @@ function initStorePage() {
     storeElements.closeTimeBtn.addEventListener('click', () => handleTimeManagement('closed'));
     storeElements.openDuplicateBtn.addEventListener('click', () => handleTimeManagement('duplicated'));
     storeElements.openTimeBtn.addEventListener('click', () => handleTimeManagement('open'));
+    storeLogoutBtn.addEventListener('click', handleLogout); // 이 줄 추가
 }
 
 function openServiceSettingsModal() {
