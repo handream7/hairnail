@@ -1,7 +1,7 @@
 // Firebase SDK에서 필요한 함수들을 가져옵니다.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { 
-    getFirestore, setDoc, doc, getDoc, collection, query, where, getDocs, addDoc, onSnapshot, deleteDoc, updateDoc, arrayUnion, arrayRemove
+    getFirestore, setDoc, doc, getDoc, collection, query, where, getDocs, addDoc, onSnapshot, deleteDoc, updateDoc, arrayUnion, arrayRemove, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { 
     getAuth, 
@@ -32,7 +32,7 @@ console.log("Firebase가 성공적으로 연결되었습니다!");
 let currentUser = null;
 let myReservationsUnsubscribe = null;
 let storeReservationsUnsubscribe = null;
-let storeServicesUnsubscribe = null;
+let storeCategoriesUnsubscribe = null;
 let storeTimeSlotsUnsubscribe = null;
 
 // --- 페이지 컨테이너 ---
@@ -52,7 +52,7 @@ onAuthStateChanged(auth, async (user) => {
     // 모든 실시간 리스너 정리
     if (myReservationsUnsubscribe) myReservationsUnsubscribe();
     if (storeReservationsUnsubscribe) storeReservationsUnsubscribe();
-    if (storeServicesUnsubscribe) storeServicesUnsubscribe();
+    if (storeCategoriesUnsubscribe) storeCategoriesUnsubscribe();
     if (storeTimeSlotsUnsubscribe) storeTimeSlotsUnsubscribe();
 
     if (user) {
@@ -68,6 +68,7 @@ onAuthStateChanged(auth, async (user) => {
                 initStorePage();
             }
         } else {
+            console.log("사용자 DB정보가 없어 로그아웃합니다.");
             await signOut(auth);
         }
     } else {
@@ -77,7 +78,7 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 
-// --- 로그인 / 회원가입 로직 (변경 없음) ---
+// --- 로그인 / 회원가입 로직 ---
 const loginIdInput = document.getElementById('login-id');
 const loginPasswordInput = document.getElementById('login-password');
 const loginStoreBtn = document.getElementById('login-store-btn');
@@ -101,9 +102,11 @@ const closeSignupModal = () => {
     customerFields.classList.add('hidden');
     submitSignupBtn.disabled = true;
 };
+
 signupBtn.addEventListener('click', openSignupModal);
 closeModalBtn.addEventListener('click', closeSignupModal);
 signupModal.addEventListener('click', (e) => e.target === signupModal && closeSignupModal());
+
 userTypeRadios.forEach(radio => {
     radio.addEventListener('change', (e) => {
         const userType = e.target.value;
@@ -112,6 +115,7 @@ userTypeRadios.forEach(radio => {
         submitSignupBtn.disabled = false;
     });
 });
+
 submitSignupBtn.addEventListener('click', async () => {
     const userTypeRadio = document.querySelector('input[name="user-type"]:checked');
     if (!userTypeRadio) return alert('회원 유형을 선택해주세요.');
@@ -140,6 +144,7 @@ submitSignupBtn.addEventListener('click', async () => {
         else alert('회원가입 중 오류가 발생했습니다.');
     }
 });
+
 const handleLogin = async (loginType) => {
     const email = loginIdInput.value;
     const password = loginPasswordInput.value;
@@ -157,14 +162,16 @@ const handleLogin = async (loginType) => {
         alert('아이디 또는 비밀번호가 올바르지 않습니다.');
     }
 };
+
 const handleLogout = () => signOut(auth);
+
 loginStoreBtn.addEventListener('click', () => handleLogin('store'));
 loginCustomerBtn.addEventListener('click', () => handleLogin('customer'));
 logoutBtn.addEventListener('click', handleLogout);
 storeLogoutBtn.addEventListener('click', handleLogout);
 
 // ===================================================================================
-// 고객 페이지 로직 (완전 복구)
+// 고객 페이지 로직
 // ===================================================================================
 const customerElements = {
     userInfo: document.getElementById('user-info'),
@@ -185,7 +192,6 @@ function resetCustomerState() {
     customerState = {
         stores: [],
         selectedStore: null,
-        services: [],
         selectedService: null,
         currentDisplayDate: new Date(),
         selectedDate: null,
@@ -194,7 +200,7 @@ function resetCustomerState() {
 }
 
 async function initCustomerPage() {
-    resetCustomerState();
+    resetCustomerForm();
     customerElements.userInfo.textContent = `${currentUser.name}님, 환영합니다.`;
     const q = query(collection(db, "users"), where("type", "==", "store"));
     const querySnapshot = await getDocs(q);
@@ -244,21 +250,37 @@ async function selectStoreForCustomer(store) {
         </div>`;
 
     customerElements.serviceSelection.innerHTML = '<p class="text-gray-500 text-sm">시술 목록을 불러오는 중...</p>';
-    const servicesColRef = collection(db, "users", store.id, "services");
-    const servicesSnapshot = await getDocs(servicesColRef);
-    customerState.services = servicesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
+    const categoriesColRef = collection(db, "users", store.id, "serviceCategories");
+    const categoriesSnapshot = await getDocs(categoriesColRef);
+    
     customerElements.serviceSelection.innerHTML = '';
-    if (customerState.services.length === 0) {
+    if (categoriesSnapshot.empty) {
         customerElements.serviceSelection.innerHTML = '<p class="text-gray-500 text-sm">등록된 시술이 없습니다.</p>';
         return;
     }
-    customerState.services.forEach(service => {
-        const label = document.createElement('label');
-        label.className = 'flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 cursor-pointer';
-        label.innerHTML = `<input type="radio" name="service" value="${service.name}" data-duration="${service.duration}" class="h-4 w-4"> <span>${service.name} (${service.duration}분)</span>`;
-        customerElements.serviceSelection.appendChild(label);
-    });
+
+    for (const categoryDoc of categoriesSnapshot.docs) {
+        const category = categoryDoc.data();
+        const categoryDiv = document.createElement('div');
+        categoryDiv.innerHTML = `<h4 class="font-bold text-md text-indigo-600 mt-3 mb-1">${category.name}</h4>`;
+        
+        const servicesColRef = collection(db, "users", store.id, "serviceCategories", categoryDoc.id, "services");
+        const servicesSnapshot = await getDocs(servicesColRef);
+
+        if (!servicesSnapshot.empty) {
+            servicesSnapshot.forEach(serviceDoc => {
+                const service = { id: serviceDoc.id, ...serviceDoc.data() };
+                const label = document.createElement('label');
+                label.className = 'flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 cursor-pointer';
+                const priceString = service.price ? `${service.price.toLocaleString()}원` : '가격 정보 없음';
+                label.innerHTML = `
+                    <input type="radio" name="service" value="${service.name}" data-duration="${service.duration}" data-price="${service.price || 0}" class="h-4 w-4"> 
+                    <span>${service.name} (${service.duration}분) - ${priceString}</span>`;
+                categoryDiv.appendChild(label);
+            });
+            customerElements.serviceSelection.appendChild(categoryDiv);
+        }
+    }
 
     if (customerState.selectedDate) await renderCustomerTimeSlots();
 }
@@ -267,9 +289,11 @@ function handleServiceSelection(e) {
     if (e.target.name === 'service') {
         customerState.selectedService = {
             name: e.target.value,
-            duration: parseInt(e.target.dataset.duration, 10)
+            duration: parseInt(e.target.dataset.duration, 10),
+            price: parseInt(e.target.dataset.price, 10)
         };
-        customerElements.estimatedTime.textContent = `예상 소요시간: ${customerState.selectedService.duration}분`;
+        const priceString = customerState.selectedService.price ? `${customerState.selectedService.price.toLocaleString()}원` : '';
+        customerElements.estimatedTime.textContent = `예상: ${customerState.selectedService.duration}분 / ${priceString}`;
         highlightCustomerTimeSlots();
         checkCustomerReservationButton();
     }
@@ -341,7 +365,11 @@ async function renderCustomerTimeSlots() {
     
     container.innerHTML = '<p class="text-gray-400 col-span-full">예약 정보를 불러오는 중...</p>';
     
-    const bookedSlots = new Set();
+    const timeManagementDocRef = doc(db, "users", selectedStore.id, "timeManagement", selectedDate);
+    const timeManagementSnap = await getDoc(timeManagementDocRef);
+    const timeManagementData = timeManagementSnap.exists() ? timeManagementSnap.data() : { closed: [], duplicated: [] };
+
+    const reservationsByTime = {};
     const q = query(collection(db, "reservations"), where("storeId", "==", selectedStore.id), where("date", "==", selectedDate));
     const querySnapshot = await getDocs(q);
     querySnapshot.forEach(doc => {
@@ -349,7 +377,11 @@ async function renderCustomerTimeSlots() {
         const slotsToBook = res.duration / 15;
         let [h, m] = res.time.split(':').map(Number);
         for (let i = 0; i < slotsToBook; i++) {
-            bookedSlots.add(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+            const timeKey = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+            if (!reservationsByTime[timeKey]) {
+                reservationsByTime[timeKey] = 0;
+            }
+            reservationsByTime[timeKey]++;
             m += 15;
             if (m >= 60) { m = 0; h++; }
         }
@@ -360,7 +392,14 @@ async function renderCustomerTimeSlots() {
         for (let m = 0; m < 60; m += 15) {
             const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
             const slot = document.createElement('div');
-            if (bookedSlots.has(time)) {
+            const reservationCount = reservationsByTime[time] || 0;
+            const isClosed = timeManagementData.closed.includes(time);
+            const isDuplicated = timeManagementData.duplicated.includes(time);
+
+            if (isClosed) {
+                 slot.className = 'p-2 border rounded-lg text-center bg-black text-white cursor-not-allowed flex flex-col justify-center items-center h-16';
+                 slot.innerHTML = `<div class="text-sm">${time}</div><div class="text-xs font-bold">닫힘</div>`;
+            } else if (reservationCount > 0 && !(isDuplicated && reservationCount < 2)) {
                 slot.className = 'p-2 border rounded-lg text-center bg-gray-500 text-white cursor-not-allowed flex flex-col justify-center items-center h-16';
                 slot.innerHTML = `<div class="text-sm">${time}</div><div class="text-xs font-bold">예약완료</div>`;
             } else {
@@ -419,6 +458,7 @@ async function handleReservation() {
         storeName: selectedStore.name,
         service: selectedService.name,
         duration: selectedService.duration,
+        price: selectedService.price,
         date: selectedDate,
         time: selectedTime,
         createdAt: new Date()
@@ -436,6 +476,7 @@ async function handleReservation() {
 function resetCustomerForm() {
     customerElements.storeSearchInput.value = '';
     customerElements.selectedStoreInfo.innerHTML = '';
+    customerElements.selectedStoreInfo.classList.add('hidden');
     customerElements.serviceSelection.innerHTML = '<p class="text-gray-500 text-sm">매장을 먼저 선택해주세요.</p>';
     customerElements.estimatedTime.textContent = '';
     customerElements.timeSlotsContainer.innerHTML = '<p class="text-gray-400 col-span-full">날짜를 선택해주세요.</p>';
@@ -449,18 +490,30 @@ function listenToMyReservations() {
     const q = query(collection(db, "reservations"), where("customerId", "==", currentUser.uid));
     myReservationsUnsubscribe = onSnapshot(q, (snapshot) => {
         customerElements.myReservationsList.innerHTML = '';
-        if (snapshot.empty) return customerElements.myReservationsList.innerHTML = '<p class="text-gray-500">예약 내역이 없습니다.</p>';
+        if (snapshot.empty) {
+            customerElements.myReservationsList.innerHTML = '<p class="text-gray-500">예약 내역이 없습니다.</p>';
+            return;
+        }
+        
         const reservations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         reservations.sort((a, b) => b.createdAt.toDate() - a.createdAt.toDate());
+        
         reservations.forEach(res => {
             const li = document.createElement('div');
             li.className = 'p-3 bg-blue-50 rounded-lg flex justify-between items-center';
+
+            // 가격 정보가 있을 경우 포맷팅, 없으면 '정보 없음' 표시
+            const priceString = res.price ? `${res.price.toLocaleString()}원` : '가격 정보 없음';
+            
+            // ★★★★★★★★★★★★★ 소요 시간, 가격 정보 표시 추가 ★★★★★★★★★★★★★
             li.innerHTML = `
                 <div>
                     <p class="font-bold">${res.storeName} - ${res.service}</p>
                     <p class="text-sm text-gray-600">${res.date} ${res.time}</p>
+                    <p class="text-sm text-gray-500 mt-1">소요시간: ${res.duration}분 / ${priceString}</p>
                 </div>
-                <button data-id="${res.id}" data-date="${res.date}" class="cancel-btn bg-red-100 text-red-700 px-3 py-1 rounded-md text-sm hover:bg-red-200">취소</button>`;
+                <button data-id="${res.id}" data-date="${res.date}" class="cancel-btn bg-red-100 text-red-700 px-3 py-1 rounded-md text-sm hover:bg-red-200 self-start">취소</button>`;
+            
             customerElements.myReservationsList.appendChild(li);
         });
     });
@@ -499,14 +552,14 @@ const storeElements = {
     slotActions: document.getElementById('store-slot-actions'),
     closeTimeBtn: document.getElementById('close-time-btn'),
     openDuplicateBtn: document.getElementById('open-duplicate-btn'),
+    openTimeBtn: document.getElementById('open-time-btn'),
 };
 const serviceModalElements = {
     modal: document.getElementById('service-settings-modal'),
     closeBtn: document.getElementById('close-service-modal-btn'),
-    list: document.getElementById('current-services-list'),
-    nameInput: document.getElementById('new-service-name'),
-    durationSelect: document.getElementById('new-service-duration'),
-    addBtn: document.getElementById('add-service-btn'),
+    list: document.getElementById('service-categories-list'),
+    categoryNameInput: document.getElementById('new-category-name'),
+    addCategoryBtn: document.getElementById('add-category-btn'),
 };
 
 let storeState = {};
@@ -517,7 +570,6 @@ function resetStoreState() {
         selectedDate: null,
         selectedSlots: new Set(),
         reservations: [],
-        closedSlots: [],
     };
 }
 
@@ -528,57 +580,144 @@ function initStorePage() {
     storeElements.serviceSettingBtn.addEventListener('click', openServiceSettingsModal);
     serviceModalElements.closeBtn.addEventListener('click', closeServiceSettingsModal);
     serviceModalElements.modal.addEventListener('click', (e) => e.target === serviceModalElements.modal && closeServiceSettingsModal());
-    serviceModalElements.addBtn.addEventListener('click', addService);
-    serviceModalElements.list.addEventListener('click', handleDeleteService);
+    serviceModalElements.addCategoryBtn.addEventListener('click', addCategory);
+    serviceModalElements.list.addEventListener('click', handleServiceListClick);
     storeElements.timeSlotsContainer.addEventListener('click', handleStoreSlotClick);
-    storeElements.closeTimeBtn.addEventListener('click', handleCloseTime);
-    storeElements.openDuplicateBtn.addEventListener('click', handleOpenDuplicate);
+    storeElements.closeTimeBtn.addEventListener('click', () => handleTimeManagement('closed'));
+    storeElements.openDuplicateBtn.addEventListener('click', () => handleTimeManagement('duplicated'));
+    storeElements.openTimeBtn.addEventListener('click', () => handleTimeManagement('open'));
 }
 
 function openServiceSettingsModal() {
     serviceModalElements.modal.classList.remove('hidden');
-    listenToStoreServices();
+    listenToStoreCategories();
 }
 function closeServiceSettingsModal() {
     serviceModalElements.modal.classList.add('hidden');
-    if (storeServicesUnsubscribe) storeServicesUnsubscribe();
+    if (storeCategoriesUnsubscribe) storeCategoriesUnsubscribe();
 }
-function listenToStoreServices() {
-    const servicesColRef = collection(db, "users", currentUser.uid, "services");
-    storeServicesUnsubscribe = onSnapshot(servicesColRef, (snapshot) => {
+
+function listenToStoreCategories() {
+    const categoriesColRef = collection(db, "users", currentUser.uid, "serviceCategories");
+    storeCategoriesUnsubscribe = onSnapshot(categoriesColRef, (snapshot) => {
         serviceModalElements.list.innerHTML = '';
-        if (snapshot.empty) return serviceModalElements.list.innerHTML = '<p class="text-gray-500">등록된 시술이 없습니다.</p>';
-        snapshot.docs.forEach(doc => {
-            const service = doc.data();
-            const div = document.createElement('div');
-            div.className = 'flex justify-between items-center p-2 bg-gray-100 rounded';
-            div.innerHTML = `<span>${service.name} (${service.duration}분)</span><button data-id="${doc.id}" class="delete-service-btn text-red-500 hover:text-red-700 font-bold">삭제</button>`;
-            serviceModalElements.list.appendChild(div);
+        if (snapshot.empty) {
+            serviceModalElements.list.innerHTML = '<p class="text-gray-500">등록된 카테고리가 없습니다. 먼저 카테고리를 추가해주세요.</p>';
+            return;
+        }
+        snapshot.docs.forEach(async (categoryDoc) => {
+            const category = { id: categoryDoc.id, ...categoryDoc.data() };
+            const categoryContainer = document.createElement('div');
+            categoryContainer.className = 'p-4 border rounded-lg';
+            categoryContainer.dataset.categoryId = category.id;
+            categoryContainer.innerHTML = `
+                <div class="flex justify-between items-center mb-3">
+                    <h4 class="text-lg font-bold text-indigo-700">${category.name}</h4>
+                    <button data-action="delete-category" class="text-sm bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200">카테고리 삭제</button>
+                </div>
+                <div class="services-list space-y-2 mb-4">
+                    </div>
+                <div class="add-service-form flex flex-wrap gap-2 p-3 bg-gray-50 rounded">
+                    <input type="text" placeholder="시술명" class="flex-grow p-2 border rounded text-sm w-full sm:w-auto">
+                    <input type="number" placeholder="가격(원)" class="p-2 border rounded text-sm w-full sm:w-auto" style="max-width: 100px;">
+                    <select class="p-2 border rounded text-sm w-full sm:w-auto" style="max-width: 120px;">
+                        <option value="">소요 시간</option>
+                        ${[15,30,45,60,75,90,105,120,135,150,165,180].map(t => `<option value="${t}">${t}분</option>`).join('')}
+                    </select>
+                    <button data-action="add-service" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm w-full sm:w-auto">시술 추가</button>
+                </div>
+            `;
+            serviceModalElements.list.appendChild(categoryContainer);
+            
+            const servicesListDiv = categoryContainer.querySelector('.services-list');
+            const servicesColRef = collection(db, "users", currentUser.uid, "serviceCategories", category.id, "services");
+            onSnapshot(servicesColRef, (servicesSnapshot) => {
+                servicesListDiv.innerHTML = '';
+                if(servicesSnapshot.empty) {
+                    servicesListDiv.innerHTML = '<p class="text-xs text-gray-500">등록된 시술이 없습니다.</p>';
+                } else {
+                    servicesSnapshot.forEach(serviceDoc => {
+                        const service = { id: serviceDoc.id, ...serviceDoc.data() };
+                        const serviceDiv = document.createElement('div');
+                        serviceDiv.className = 'flex justify-between items-center p-2 bg-gray-100 rounded text-sm';
+                        serviceDiv.dataset.serviceId = service.id;
+                        serviceDiv.innerHTML = `
+                            <span>${service.name} (${service.duration}분) - ${service.price.toLocaleString()}원</span>
+                            <button data-action="delete-service" class="text-red-500 hover:text-red-700 font-bold text-xl">&times;</button>
+                        `;
+                        servicesListDiv.appendChild(serviceDiv);
+                    });
+                }
+            });
         });
     });
 }
-async function addService() {
-    const name = serviceModalElements.nameInput.value.trim();
-    const duration = parseInt(serviceModalElements.durationSelect.value, 10);
-    if (!name || !duration) return alert('시술명과 소요 시간을 모두 선택해주세요.');
+
+async function addCategory() {
+    const name = serviceModalElements.categoryNameInput.value.trim();
+    if (!name) return alert('카테고리명을 입력해주세요.');
     try {
-        await addDoc(collection(db, "users", currentUser.uid, "services"), { name, duration });
-        serviceModalElements.nameInput.value = '';
-        serviceModalElements.durationSelect.value = '';
+        await addDoc(collection(db, "users", currentUser.uid, "serviceCategories"), { name });
+        serviceModalElements.categoryNameInput.value = '';
     } catch (error) {
-        console.error("시술 추가 오류: ", error);
-        alert('시술 추가 중 오류가 발생했습니다.');
+        console.error("카테고리 추가 오류: ", error);
+        alert('카테고리 추가 중 오류가 발생했습니다.');
     }
 }
-async function handleDeleteService(e) {
-    if (e.target.classList.contains('delete-service-btn')) {
-        const serviceId = e.target.dataset.id;
-        if (confirm('정말로 이 시술을 삭제하시겠습니까?')) {
+
+async function handleServiceListClick(e) {
+    const button = e.target.closest('button');
+    if (!button) return;
+
+    const action = button.dataset.action;
+    const categoryContainer = button.closest('[data-category-id]');
+    const categoryId = categoryContainer?.dataset.categoryId;
+
+    if (action === 'add-service') {
+        if (!categoryId) return;
+        const form = button.closest('.add-service-form');
+        const name = form.querySelector('input[type="text"]').value.trim();
+        const price = parseInt(form.querySelector('input[type="number"]').value, 10);
+        const duration = parseInt(form.querySelector('select').value, 10);
+
+        if (!name || !price || !duration) return alert('시술명, 가격, 소요 시간을 모두 입력해주세요.');
+
+        try {
+            await addDoc(collection(db, "users", currentUser.uid, "serviceCategories", categoryId, "services"), { name, price, duration });
+            form.querySelector('input[type="text"]').value = '';
+            form.querySelector('input[type="number"]').value = '';
+            form.querySelector('select').value = '';
+        } catch (error) {
+            console.error("시술 추가 오류: ", error);
+            alert('시술 추가 중 오류가 발생했습니다.');
+        }
+    } else if (action === 'delete-service') {
+        const serviceDiv = button.closest('[data-service-id]');
+        const serviceId = serviceDiv.dataset.serviceId;
+        if (!categoryId || !serviceId) return;
+
+        if (confirm('이 시술을 삭제하시겠습니까?')) {
             try {
-                await deleteDoc(doc(db, "users", currentUser.uid, "services", serviceId));
+                await deleteDoc(doc(db, "users", currentUser.uid, "serviceCategories", categoryId, "services", serviceId));
             } catch (error) {
                 console.error("시술 삭제 오류: ", error);
                 alert('시술 삭제 중 오류가 발생했습니다.');
+            }
+        }
+    } else if (action === 'delete-category') {
+        if (!categoryId) return;
+        if (confirm('이 카테고리를 삭제하시겠습니까?\n카테고리에 포함된 모든 시술 정보가 함께 삭제되며, 복구할 수 없습니다.')) {
+            try {
+                const servicesColRef = collection(db, "users", currentUser.uid, "serviceCategories", categoryId, "services");
+                const servicesSnapshot = await getDocs(servicesColRef);
+                const batch = writeBatch(db);
+                servicesSnapshot.forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
+
+                await deleteDoc(doc(db, "users", currentUser.uid, "serviceCategories", categoryId));
+            } catch (error) {
+                console.error("카테고리 삭제 오류: ", error);
+                alert('카테고리 삭제 중 오류가 발생했습니다.');
             }
         }
     }
@@ -635,7 +774,6 @@ async function selectStoreDate(date) {
     updateSlotActionButtons();
     renderStoreCalendar();
     listenToReservationsForDate(date);
-    await renderStoreTimeSlots(date);
 }
 
 function listenToReservationsForDate(date) {
@@ -643,9 +781,10 @@ function listenToReservationsForDate(date) {
     if (storeReservationsUnsubscribe) storeReservationsUnsubscribe();
     const q = query(collection(db, "reservations"), where("storeId", "==", currentUser.uid), where("date", "==", date));
     storeReservationsUnsubscribe = onSnapshot(q, (snapshot) => {
-        storeElements.reservationList.innerHTML = '';
         const reservations = snapshot.docs.map(doc => doc.data());
-        storeState.reservations = reservations; // 상태 업데이트
+        storeState.reservations = reservations;
+        
+        storeElements.reservationList.innerHTML = '';
         if (reservations.length === 0) {
             storeElements.reservationList.innerHTML = '<p class="text-gray-500">해당 날짜에 예약이 없습니다.</p>';
         } else {
@@ -653,18 +792,18 @@ function listenToReservationsForDate(date) {
             reservations.forEach(res => {
                 const div = document.createElement('div');
                 div.className = 'p-3 bg-blue-50 rounded-lg';
-                div.innerHTML = `<p class="font-bold">${res.time} - ${res.customerName}님</p><p class="text-sm text-gray-600">${res.service} (${res.duration}분)</p>`;
+                const priceString = res.price ? `${res.price.toLocaleString()}원` : '';
+                div.innerHTML = `<p class="font-bold">${res.time} - ${res.customerName}님</p><p class="text-sm text-gray-600">${res.service} (${res.duration}분) / ${priceString}</p>`;
                 storeElements.reservationList.appendChild(div);
             });
         }
-        renderStoreTimeSlots(date); // 예약 변경 시 시간표 다시 렌더링
+        renderStoreTimeSlots(date);
     });
 }
 
 async function renderStoreTimeSlots(date) {
     if (!date) return storeElements.timeSlotsContainer.innerHTML = '<p class="text-gray-400 col-span-full">달력에서 날짜를 선택해주세요.</p>';
     
-    // 이 날짜의 특별한 시간 관리 정보 가져오기 (닫힘, 중복 등)
     const timeManagementDocRef = doc(db, "users", currentUser.uid, "timeManagement", date);
     const timeManagementSnap = await getDoc(timeManagementDocRef);
     const timeManagementData = timeManagementSnap.exists() ? timeManagementSnap.data() : { closed: [], duplicated: [] };
@@ -672,38 +811,50 @@ async function renderStoreTimeSlots(date) {
     const container = storeElements.timeSlotsContainer;
     container.innerHTML = '';
 
+    const reservationsByTime = {};
+    storeState.reservations.forEach(r => {
+        const slotsToBook = r.duration / 15;
+        let [h, m] = r.time.split(':').map(Number);
+        for (let i = 0; i < slotsToBook; i++) {
+            const timeKey = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+            if (!reservationsByTime[timeKey]) {
+                reservationsByTime[timeKey] = 0;
+            }
+            reservationsByTime[timeKey]++;
+            m += 15;
+            if (m >= 60) { m = 0; h++; }
+        }
+    });
+
     for (let h = 9; h < 21; h++) {
         for (let m = 0; m < 60; m += 15) {
             const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
             const slot = document.createElement('div');
             slot.dataset.time = time;
-
-            const reservationsAtTime = storeState.reservations.filter(r => {
-                const [rh, rm] = r.time.split(':').map(Number);
-                const rStart = rh * 60 + rm;
-                const rEnd = rStart + r.duration;
-                const slotStart = h * 60 + m;
-                return slotStart >= rStart && slotStart < rEnd;
-            });
-
-            if (timeManagementData.closed.includes(time)) {
-                slot.className = 'p-2 border rounded-lg text-center bg-black text-white cursor-pointer flex flex-col justify-center items-center h-16';
-                slot.innerHTML = `<div class="text-sm">${time}</div><div class="text-xs font-bold">닫힘</div>`;
-            } else if (reservationsAtTime.length > 0) {
-                 const isDuplicated = timeManagementData.duplicated.includes(time);
-                 const canBookMore = reservationsAtTime.length < 2 || (reservationsAtTime.length >= 2 && isDuplicated);
-                 
-                 let bgColor = canBookMore ? 'bg-blue-500' : 'bg-gray-500';
-                 let label = `예약완료 (${reservationsAtTime.length})`;
-                 if (isDuplicated) label += " (중복)";
-                 
-                 slot.className = `p-2 border rounded-lg text-center text-white cursor-pointer flex flex-col justify-center items-center h-16 ${bgColor}`;
-                 slot.innerHTML = `<div class="text-sm">${time}</div><div class="text-xs font-bold">${label}</div>`;
+            
+            const reservationCount = reservationsByTime[time] || 0;
+            const isClosed = timeManagementData.closed?.includes(time);
+            const isDuplicated = timeManagementData.duplicated?.includes(time);
+            
+            let slotClass = 'p-2 border rounded-lg text-center cursor-pointer flex flex-col justify-center items-center h-16';
+            let slotHTML = `<div class="text-sm">${time}</div>`;
+            
+            if (isClosed) {
+                slotClass += ' bg-black text-white';
+                slotHTML += `<div class="text-xs font-bold">닫힘</div>`;
+            } else if (isDuplicated) {
+                slotClass += reservationCount >= 2 ? ' bg-purple-500 text-white' : ' bg-green-200';
+                slotHTML += `<div class="text-xs font-bold">중복(${reservationCount}/2)</div>`;
+            } else if (reservationCount > 0) {
+                slotClass += ' bg-blue-500 text-white';
+                slotHTML += `<div class="text-xs font-bold">예약완료</div>`;
             } else {
-                slot.className = 'p-2 border rounded-lg text-center cursor-pointer bg-gray-50 hover:bg-gray-200 flex justify-center items-center h-16';
-                slot.textContent = time;
+                slotClass += ' bg-gray-50 hover:bg-gray-200';
             }
             
+            slot.className = slotClass;
+            slot.innerHTML = slotHTML;
+
             if (storeState.selectedSlots.has(time)) {
                  slot.classList.add('selected-slot');
             }
@@ -728,54 +879,40 @@ function handleStoreSlotClick(e) {
 }
 
 function updateSlotActionButtons() {
-    if (storeState.selectedSlots.size > 0) {
-        storeElements.slotActions.classList.remove('hidden');
-    } else {
-        storeElements.slotActions.classList.add('hidden');
-    }
+    storeElements.slotActions.classList.toggle('hidden', storeState.selectedSlots.size === 0);
 }
 
-async function handleCloseTime() {
+async function handleTimeManagement(type) {
     if (storeState.selectedSlots.size === 0) return alert("시간을 먼저 선택해주세요.");
-    if (!confirm("선택된 시간을 '닫힘' 처리하시겠습니까? 해당 시간에는 예약을 받을 수 없습니다.")) return;
-
     const date = storeState.selectedDate;
+    if (!date) return;
+
     const timeManagementDocRef = doc(db, "users", currentUser.uid, "timeManagement", date);
-    
+    const selectedTimes = Array.from(storeState.selectedSlots);
+
     try {
-        await setDoc(timeManagementDocRef, { 
-            closed: arrayUnion(...storeState.selectedSlots),
-            duplicated: arrayRemove(...storeState.selectedSlots) // 닫힘 처리 시 중복 설정은 제거
-        }, { merge: true });
+        const payload = {};
+        if (type === 'closed') {
+            if (!confirm("선택된 시간을 '닫힘' 처리하시겠습니까?")) return;
+            payload.closed = arrayUnion(...selectedTimes);
+            payload.duplicated = arrayRemove(...selectedTimes);
+        } else if (type === 'duplicated') {
+            if (!confirm("선택된 시간에 중복 예약을 허용하시겠습니까?")) return;
+            payload.duplicated = arrayUnion(...selectedTimes);
+            payload.closed = arrayRemove(...selectedTimes);
+        } else if (type === 'open') {
+            if (!confirm("선택된 시간을 기본 상태로 되돌리시겠습니까?")) return;
+            payload.closed = arrayRemove(...selectedTimes);
+            payload.duplicated = arrayRemove(...selectedTimes);
+        }
+
+        await setDoc(timeManagementDocRef, payload, { merge: true });
         
         storeState.selectedSlots.clear();
         updateSlotActionButtons();
         await renderStoreTimeSlots(date);
     } catch (error) {
-        console.error("시간 닫기 오류: ", error);
-        alert("시간을 닫는 중 오류가 발생했습니다.");
+        console.error("시간 관리 오류:", error);
+        alert("시간을 변경하는 중 오류가 발생했습니다.");
     }
 }
-
-async function handleOpenDuplicate() {
-    if (storeState.selectedSlots.size === 0) return alert("시간을 먼저 선택해주세요.");
-    if (!confirm("선택된 시간에 중복 예약을 허용하시겠습니까?")) return;
-
-    const date = storeState.selectedDate;
-    const timeManagementDocRef = doc(db, "users", currentUser.uid, "timeManagement", date);
-
-    try {
-        await setDoc(timeManagementDocRef, { 
-            duplicated: arrayUnion(...storeState.selectedSlots),
-            closed: arrayRemove(...storeState.selectedSlots) // 중복 허용 시 닫힘 설정은 제거
-        }, { merge: true });
-        
-        storeState.selectedSlots.clear();
-        updateSlotActionButtons();
-        await renderStoreTimeSlots(date);
-    } catch (error) {
-        console.error("중복 열기 오류: ", error);
-        alert("중복 예약을 허용하는 중 오류가 발생했습니다.");
-    }
-}
-
