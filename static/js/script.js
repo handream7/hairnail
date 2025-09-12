@@ -22,11 +22,19 @@ const firebaseConfig = {
     measurementId: "G-L1FKMM3L60"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-const analytics = getAnalytics(app);
-console.log("Firebase가 성공적으로 연결되었습니다!");
+// 변수를 바깥 스코프에서 선언합니다.
+let app, db, auth, analytics;
+
+try {
+    // try 블록 안에서는 값을 할당만 합니다.
+    app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    auth = getAuth(app);
+    analytics = getAnalytics(app);
+    console.log("Firebase가 성공적으로 연결되었습니다!");
+} catch (e) {
+    console.error("Firebase 초기화 중 심각한 오류 발생:", e);
+}
 
 // --- 전역 상태 변수 ---
 let currentUser = null;
@@ -68,7 +76,7 @@ onAuthStateChanged(auth, async (user) => {
                 initStorePage();
             }
         } else {
-            console.log("사용자 DB정보가 없어 로그아웃합니다.");
+            console.warn("Firebase 인증은 되었으나 DB에 사용자 정보가 없음. 강제 로그아웃 처리.");
             await signOut(auth);
         }
     } else {
@@ -77,15 +85,12 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-
-// --- 로그인 / 회원가입 로직 ---
+// --- 로그인 / 회원가입 요소 ---
 const loginIdInput = document.getElementById('login-id');
 const loginPasswordInput = document.getElementById('login-password');
 const loginStoreBtn = document.getElementById('login-store-btn');
 const loginCustomerBtn = document.getElementById('login-customer-btn');
 const signupBtn = document.getElementById('signup-btn');
-const logoutBtn = document.getElementById('logout-btn');
-const storeLogoutBtn = document.getElementById('store-logout-btn');
 const signupModal = document.getElementById('signup-modal');
 const closeModalBtn = document.getElementById('close-modal-btn');
 const userTypeRadios = document.querySelectorAll('input[name="user-type"]');
@@ -93,6 +98,10 @@ const storeFields = document.getElementById('store-fields');
 const customerFields = document.getElementById('customer-fields');
 const submitSignupBtn = document.getElementById('submit-signup-btn');
 const signupForm = document.getElementById('signup-form');
+
+// --- 페이지별 요소 ---
+const logoutBtn = document.getElementById('logout-btn');
+const storeLogoutBtn = document.getElementById('store-logout-btn');
 
 const openSignupModal = () => signupModal.classList.remove('hidden');
 const closeSignupModal = () => {
@@ -163,7 +172,9 @@ const handleLogin = async (loginType) => {
     }
 };
 
-const handleLogout = () => signOut(auth);
+const handleLogout = () => {
+    signOut(auth);
+};
 
 loginStoreBtn.addEventListener('click', () => handleLogin('store'));
 loginCustomerBtn.addEventListener('click', () => handleLogin('customer'));
@@ -210,7 +221,7 @@ async function initCustomerPage() {
     customerElements.storeSearchInput.addEventListener('input', handleStoreSearchInput);
     customerElements.serviceSelection.addEventListener('change', handleServiceSelection);
     customerElements.reserveBtn.addEventListener('click', handleReservation);
-    logoutBtn.addEventListener('click', handleLogout); // 이 줄 추가
+    logoutBtn.addEventListener('click', handleLogout);
 }
 
 function handleStoreSearchInput(e) {
@@ -500,11 +511,8 @@ function listenToMyReservations() {
         reservations.forEach(res => {
             const li = document.createElement('div');
             li.className = 'p-3 bg-blue-50 rounded-lg flex justify-between items-center';
-
-            // 가격 정보가 있을 경우 포맷팅, 없으면 '정보 없음' 표시
             const priceString = res.price ? `${res.price.toLocaleString()}원` : '가격 정보 없음';
             
-            // ★★★★★★★★★★★★★ 소요 시간, 가격 정보 표시 추가 ★★★★★★★★★★★★★
             li.innerHTML = `
                 <div>
                     <p class="font-bold">${res.storeName} - ${res.service}</p>
@@ -585,7 +593,7 @@ function initStorePage() {
     storeElements.closeTimeBtn.addEventListener('click', () => handleTimeManagement('closed'));
     storeElements.openDuplicateBtn.addEventListener('click', () => handleTimeManagement('duplicated'));
     storeElements.openTimeBtn.addEventListener('click', () => handleTimeManagement('open'));
-    storeLogoutBtn.addEventListener('click', handleLogout); // 이 줄 추가
+    storeLogoutBtn.addEventListener('click', handleLogout);
 }
 
 function openServiceSettingsModal() {
