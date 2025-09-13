@@ -55,6 +55,33 @@ function parseLocalYmd(ymd) {
   return new Date(Y, M - 1, D);
 }
 
+// ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+// ★★★★★★★★★★★ 시간 표시 형식 변경 함수 추가 ★★★★★★★★★★★
+// ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+/**
+ * 분(minutes)을 'X시간 Y분' 형식으로 변환하는 함수
+ * @param {number} minutes - 변환할 총 분
+ * @returns {string} - 변환된 시간 문자열
+ */
+function formatDuration(minutes) {
+  if (isNaN(minutes) || minutes < 0) {
+    return "";
+  }
+  if (minutes < 60) {
+    return `${minutes}분`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (remainingMinutes === 0) {
+    return `${hours}시간`;
+  }
+  return `${hours}시간 ${remainingMinutes}분`;
+}
+// ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+// ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+// ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+
+
 // --- 전역 상태 / 구독 핸들 ---
 let currentUser = null;
 let myReservationsUnsubscribe = null;
@@ -319,7 +346,7 @@ async function selectStoreForCustomer(store) {
         const priceString = service.price ? `${service.price.toLocaleString()}원` : "가격 정보 없음";
         label.innerHTML = `
           <input type="radio" name="service" value="${service.name}" data-duration="${service.duration}" data-price="${service.price || 0}" class="h-4 w-4">
-          <span>${service.name} (${service.duration}분) - ${priceString}</span>`;
+          <span>${service.name} (${formatDuration(service.duration)}) - ${priceString}</span>`; // ★ 변경된 부분
         categoryDiv.appendChild(label);
       });
       customerElements.serviceSelection.appendChild(categoryDiv);
@@ -337,7 +364,7 @@ function handleServiceSelection(e) {
       price: parseInt(e.target.dataset.price, 10)
     };
     const priceString = customerState.selectedService.price ? `${customerState.selectedService.price.toLocaleString()}원` : "";
-    customerElements.estimatedTime.textContent = `예상: ${customerState.selectedService.duration}분 / ${priceString}`;
+    customerElements.estimatedTime.textContent = `예상: ${formatDuration(customerState.selectedService.duration)} / ${priceString}`; // ★ 변경된 부분
     highlightCustomerTimeSlots();
     checkCustomerReservationButton();
   }
@@ -543,7 +570,7 @@ function listenToMyReservations() {
         <div>
           <p class="font-bold">${res.storeName} - ${res.service}</p>
           <p class="text-sm text-gray-600">${res.date} ${res.time}</p>
-          <p class="text-sm text-gray-500 mt-1">소요시간: ${res.duration}분 / ${priceString}</p>
+          <p class="text-sm text-gray-500 mt-1">소요시간: ${formatDuration(res.duration)} / ${priceString}</p>
         </div>
         <button data-id="${res.id}" data-date="${res.date}" class="cancel-btn bg-red-100 text-red-700 px-3 py-1 rounded-md text-sm hover:bg-red-200 self-start">취소</button>`;
       customerElements.myReservationsList.appendChild(li);
@@ -681,8 +708,8 @@ function listenToStoreCategories() {
             row.className = "flex justify-between items-center p-2 bg-gray-100 rounded text-sm";
             row.dataset.serviceId = service.id;
             row.innerHTML = `
-              <span>${service.name} (${service.duration}분) - ${service.price.toLocaleString()}원</span>
-              <button data-action="delete-service" class="text-red-500 hover:text-red-700 font-bold text-xl">&times;</button>`;
+              <span>${service.name} (${formatDuration(service.duration)}) - ${service.price.toLocaleString()}원</span>
+              <button data-action="delete-service" class="text-red-500 hover:text-red-700 font-bold text-xl">&times;</button>`; // ★ 변경된 부분
             servicesListDiv.appendChild(row);
           });
         }
@@ -830,7 +857,7 @@ function listenToReservationsForDate(date) {
         const div = document.createElement("div");
         div.className = "p-3 bg-blue-50 rounded-lg";
         const priceString = res.price ? `${res.price.toLocaleString()}원` : "";
-        div.innerHTML = `<p class="font-bold">${res.time} - ${res.customerName}님</p><p class="text-sm text-gray-600">${res.service} (${res.duration}분) / ${priceString}</p>`;
+        div.innerHTML = `<p class="font-bold">${res.time} - ${res.customerName}님</p><p class="text-sm text-gray-600">${res.service} (${formatDuration(res.duration)}) / ${priceString}</p>`; // ★ 변경된 부분
         storeElements.reservationList.appendChild(div);
       });
     }
